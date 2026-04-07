@@ -41,20 +41,30 @@ app.post('/webhook', async (req, res) => {
 
   if (!text) return;
 
-  // Из тестовой группы — игнорируем всё
-  if (chatId === TEST_GROUP) return;
+  // Из основной группы — читаем и отвечаем в тестовую
+  if (chatId === MAIN_GROUP) {
+    console.log(`Вопрос из основной группы от ${sender}: ${text}`);
+    try {
+      const result = await askClaude(text);
+      await sendToTest(sender, text, result.answer, result.confident);
+      console.log(`Отправлено в тестовую группу`);
+    } catch (err) {
+      console.error('Ошибка:', err.message);
+    }
+    return;
+  }
 
-  // Только из основной группы
-  if (chatId !== MAIN_GROUP) return;
-
-  console.log(`Вопрос от ${sender}: ${text}`);
-
-  try {
-    const result = await askClaude(text);
-    await sendToTest(sender, text, result.answer, result.confident);
-    console.log(`Отправлено в тестовую группу`);
-  } catch (err) {
-    console.error('Ошибка:', err.message);
+  // Из тестовой группы — читаем и отвечаем там же
+  if (chatId === TEST_GROUP) {
+    console.log(`Вопрос из тестовой группы от ${sender}: ${text}`);
+    try {
+      const result = await askClaude(text);
+      await sendToTestDirect(sender, text, result.answer, result.confident);
+      console.log(`Ответ отправлен в тестовую группу`);
+    } catch (err) {
+      console.error('Ошибка:', err.message);
+    }
+    return;
   }
 });
 
@@ -65,7 +75,7 @@ async function askClaude(question) {
 
   const userMessage =
     (context ? `Предыдущие вопросы для контекста:\n${context}\n\n` : '') +
-    `Новый вопрос от сотрудника магазина: "${question}"`;
+    `Новый вопрос: "${question}"`;
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -94,14 +104,13 @@ async function askClaude(question) {
   return { answer, confident };
 }
 
+// Вопрос из основной — два сообщения в тестовую
 async function sendToTest(sender, question, answer, confident) {
   const icon   = confident ? '✅' : '⚠️';
   const status = confident ? 'Есть вариант ответа' : 'Нужна помощь менеджера';
 
-  // Сообщение 1 — вопрос
-  const msg1 = `❓ *Новый вопрос от ${sender}:*\n${question}`;
+  const msg1 = `❓ *Новый вопрос из основной группы от ${sender}:*\n${question}`;
 
-  // Сообщение 2 — ответ только в тестовую группу
   const msg2 =
     `${icon} *${status}*\n\n` +
     `🤖 *Предлагаемый ответ:*\n${answer}\n\n` +
@@ -110,6 +119,18 @@ async function sendToTest(sender, question, answer, confident) {
   await sendMessage(TEST_GROUP, msg1);
   await new Promise(r => setTimeout(r, 1000));
   await sendMessage(TEST_GROUP, msg2);
+}
+
+// Вопрос из тестовой — отвечаем там же
+async function sendToTestDirect(sender, question, answer, confident) {
+  const icon   = confident ? '✅' : '⚠️';
+  const status = confident ? 'Есть ответ' : 'Нужна помощь менеджера';
+
+  const msg =
+    `${icon} *${status}*\n\n` +
+    `🤖 *Ответ на вопрос "${question}":*\n${answer}`;
+
+  await sendMessage(TEST_GROUP, msg);
 }
 
 async function sendMessage(chatId, message) {
