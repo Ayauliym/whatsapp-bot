@@ -141,8 +141,17 @@ async function sendToTestDirect(sender, question, answer, confident) {
 }
 
 async function sendMessage(chatId, message) {
-  await fetch(
-    `${API_URL}/waInstance${INSTANCE}/sendMessage/${TOKEN}`,
+  const url = `${API_URL}/waInstance${INSTANCE}/sendMessage/${TOKEN}`;
+  console.log(`Отправляю сообщение на URL: ${url}`);
+  console.log(`chatId: ${chatId}`);
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chatId, message })
+  });
+  const result = await response.json();
+  console.log(`Ответ Green API:`, JSON.stringify(result));
+},
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
