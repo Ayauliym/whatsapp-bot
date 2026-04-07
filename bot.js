@@ -88,7 +88,7 @@ async function sendToTest(sender, question, answer, confident) {
     `🤖 *Ответ бота:*\n${answer}`;
 
   await fetch(
-    `https://api.greenapi.com/waInstance${INSTANCE}/sendMessage/${TOKEN}`,
+    `${API_URL}/waInstance${INSTANCE}/sendMessage/${TOKEN}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
