@@ -41,8 +41,15 @@ app.post('/webhook', async (req, res) => {
 
   if (!text) return;
 
+  // Нормализуем ID — убираем @g.us для сравнения
+  const chatIdClean = chatId ? chatId.replace('@g.us', '') : '';
+  const mainGroupClean = MAIN_GROUP ? MAIN_GROUP.replace('@g.us', '') : '';
+  const testGroupClean = TEST_GROUP ? TEST_GROUP.replace('@g.us', '') : '';
+
+  console.log(`Получено сообщение от ${sender} из чата ${chatIdClean}: ${text}`);
+
   // Из основной группы — читаем и отвечаем в тестовую
-  if (chatId === MAIN_GROUP) {
+  if (chatIdClean === mainGroupClean) {
     console.log(`Вопрос из основной группы от ${sender}: ${text}`);
     try {
       const result = await askClaude(text);
@@ -55,7 +62,7 @@ app.post('/webhook', async (req, res) => {
   }
 
   // Из тестовой группы — читаем и отвечаем там же
-  if (chatId === TEST_GROUP) {
+  if (chatIdClean === testGroupClean) {
     console.log(`Вопрос из тестовой группы от ${sender}: ${text}`);
     try {
       const result = await askClaude(text);
@@ -66,6 +73,8 @@ app.post('/webhook', async (req, res) => {
     }
     return;
   }
+
+  console.log(`Сообщение из неизвестного чата: ${chatIdClean} — игнорируем`);
 });
 
 async function askClaude(question) {
@@ -104,7 +113,6 @@ async function askClaude(question) {
   return { answer, confident };
 }
 
-// Вопрос из основной — два сообщения в тестовую
 async function sendToTest(sender, question, answer, confident) {
   const icon   = confident ? '✅' : '⚠️';
   const status = confident ? 'Есть вариант ответа' : 'Нужна помощь менеджера';
@@ -121,7 +129,6 @@ async function sendToTest(sender, question, answer, confident) {
   await sendMessage(TEST_GROUP, msg2);
 }
 
-// Вопрос из тестовой — отвечаем там же
 async function sendToTestDirect(sender, question, answer, confident) {
   const icon   = confident ? '✅' : '⚠️';
   const status = confident ? 'Есть ответ' : 'Нужна помощь менеджера';
