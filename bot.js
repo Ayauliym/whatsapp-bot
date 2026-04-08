@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const fetch = require('node-fetch');
 const app = express();
@@ -10,6 +11,17 @@ const CLAUDE_KEY = process.env.ANTHROPIC_API_KEY;
 const MAIN_GROUP = process.env.MAIN_GROUP_ID;
 const TEST_GROUP = process.env.TEST_GROUP_ID;
 const PORT       = process.env.PORT || 3000;
+
+// Убирает @g.us если есть
+function cleanId(id) {
+  return id ? id.replace('@g.us', '') : '';
+}
+
+// Добавляет @g.us для отправки через Green API
+function toGroupChatId(id) {
+  const clean = cleanId(id);
+  return clean ? clean + '@g.us' : '';
+}
 
 const memory = [];
 
@@ -41,9 +53,9 @@ app.post('/webhook', async (req, res) => {
 
   if (!text) return;
 
-  const chatIdClean = chatId ? chatId.replace('@g.us', '') : '';
-  const mainGroupClean = MAIN_GROUP ? MAIN_GROUP.replace('@g.us', '') : '';
-  const testGroupClean = TEST_GROUP ? TEST_GROUP.replace('@g.us', '') : '';
+  const chatIdClean    = cleanId(chatId);
+  const mainGroupClean = cleanId(MAIN_GROUP);
+  const testGroupClean = cleanId(TEST_GROUP);
 
   console.log('Получено сообщение от ' + sender + ' из чата ' + chatIdClean + ': ' + text);
 
@@ -90,7 +102,7 @@ async function askClaude(question) {
       'anthropic-version': '2023-06-01'
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-6',
       max_tokens: 600,
       system: SYSTEM_PROMPT,
       messages: [{ role: 'user', content: userMessage }]
@@ -98,6 +110,12 @@ async function askClaude(question) {
   });
 
   const json = await response.json();
+
+  if (json.error) {
+    console.error('Ошибка Claude API:', json.error);
+    throw new Error(json.error.message || 'Claude API error');
+  }
+
   const answer = json.content && json.content[0] ? json.content[0].text : 'Не удалось получить ответ';
   const confident = !answer.startsWith('НЕУВЕРЕН:');
 
@@ -110,19 +128,19 @@ async function askClaude(question) {
 }
 
 async function sendToTest(sender, question, answer, confident) {
-  const icon = confident ? 'УВЕРЕН' : 'НУЖНА ПРОВЕРКА';
-  const msg1 = 'Новый вопрос из основной группы от ' + sender + ':\n' + question;
+  const icon = confident ? '✅ УВЕРЕН' : '⚠️ НУЖНА ПРОВЕРКА';
+  const msg1 = '❓ Новый вопрос из основной группы\nОт: ' + sender + '\n\n' + question;
   const msg2 = icon + '\n\nПредлагаемый ответ:\n' + answer + '\n\nМенеджер, проверьте и подскажите правильный ответ';
 
-  await sendMessage(TEST_GROUP, msg1);
+  await sendMessage(toGroupChatId(TEST_GROUP), msg1);
   await new Promise(function(r) { setTimeout(r, 1000); });
-  await sendMessage(TEST_GROUP, msg2);
+  await sendMessage(toGroupChatId(TEST_GROUP), msg2);
 }
 
 async function sendToTestDirect(sender, question, answer, confident) {
-  const icon = confident ? 'УВЕРЕН' : 'НУЖНА ПРОВЕРКА';
+  const icon = confident ? '✅ УВЕРЕН' : '⚠️ НУЖНА ПРОВЕРКА';
   const msg = icon + '\n\nОтвет на вопрос "' + question + '":\n' + answer;
-  await sendMessage(TEST_GROUP, msg);
+  await sendMessage(toGroupChatId(TEST_GROUP), msg);
 }
 
 async function sendMessage(chatId, message) {
@@ -139,6 +157,7 @@ async function sendMessage(chatId, message) {
 
 app.listen(PORT, function() {
   console.log('Бот запущен на порту ' + PORT);
-  console.log('Основная группа: ' + MAIN_GROUP);
-  console.log('Тестовая группа: ' + TEST_GROUP);
+  console.log('Основная группа: ' + toGroupChatId(MAIN_GROUP));
+  console.log('Тестовая группа: ' + toGroupChatId(TEST_GROUP));
 });
+
