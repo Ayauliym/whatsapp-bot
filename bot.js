@@ -4,6 +4,8 @@ const fetch = require('node-fetch');
 const app = express();
 app.use(express.json());
 
+app.get('/', (req, res) => res.send('Bot is running'));
+
 const INSTANCE   = process.env.GREEN_API_INSTANCE;
 const TOKEN      = process.env.GREEN_API_TOKEN;
 const API_URL    = process.env.GREEN_API_URL;
